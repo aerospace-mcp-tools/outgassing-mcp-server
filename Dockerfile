@@ -26,7 +26,7 @@ ADD . /app
 
 # Sync the project into a new environment, asserting the lockfile is up to date
 WORKDIR /app
-RUN uv sync --locked
+RUN uv sync
 
 # Expose port 8080 (or any other port your application uses)
 EXPOSE 8080
