@@ -1,0 +1,9 @@
+[project]
+name = "Outgassing MCP Server"
+version = "0.1.0"
+description = "MCP server for querying outgassing properties of materials through approved aerospace sources."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastmcp>=2.13.0.2",
+]
