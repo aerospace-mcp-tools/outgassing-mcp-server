@@ -1,5 +1,5 @@
 [project]
-name = "Outgassing MCP Server"
+name = "outgassing-mcp-server"
 version = "0.1.0"
 description = "MCP server for querying outgassing properties of materials through approved aerospace sources."
 readme = "README.md"
