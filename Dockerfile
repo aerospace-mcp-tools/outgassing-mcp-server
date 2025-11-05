@@ -28,8 +28,5 @@ ADD . /app
 WORKDIR /app
 RUN uv sync
 
-# Expose port 8080 (or any other port your application uses)
-EXPOSE 8080
-
 # Presuming there is a `main.py` command provided by the project
 CMD ["uv", "run", "main.py"]

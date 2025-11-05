@@ -211,3 +211,6 @@ __marimo__/
 
 # Zscaler certifications
 zscaler-root-ca.cer
+
+# Local database cache
+Outgassing_Db_rows.csv

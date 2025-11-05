@@ -1,10 +1,160 @@
+import ssl
+import urllib.request
+import pandas as pd
+import json
 from fastmcp import FastMCP
 
-mcp = FastMCP("My MCP Server")
+# Create SSL context that will work with corporate certificates
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
 
-@mcp.tool
-def greet(name: str) -> str:
-    return f"Hello, {name}!"
+# Install custom HTTPS handler
+https_handler = urllib.request.HTTPSHandler(context=ssl_context)
+opener = urllib.request.build_opener(https_handler)
+urllib.request.install_opener(opener)
+
+app = FastMCP("outgassing-mcp-server")
+
+# Global data cache
+outgassing_data = None
+
+def load_outgassing_data():
+    """Load data with online/local fallback pattern"""
+    global outgassing_data
+    if outgassing_data is not None:
+        return outgassing_data
+    
+    url = "https://data.nasa.gov/docs/legacy/Outgassing_Db/Outgassing_Db_rows.csv"
+    local_file = "Outgassing_Db_rows.csv"
+    
+    try:
+        outgassing_data = pd.read_csv(url)
+        print("Loaded outgassing data from online source")
+    except Exception as e:
+        try:
+            outgassing_data = pd.read_csv(local_file)
+            print("Loaded outgassing data from local cache")
+        except Exception as local_e:
+            return f"Error: Unable to load outgassing data - Online: {str(e)}, Local: {str(local_e)}"
+    
+    return outgassing_data
+
+@app.tool()
+def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
+    """Search for materials by name with outgassing limits
+    
+    Args:
+        material: Material name to search for (fuzzy matching)
+        max_tml: Maximum acceptable TML percentage (default 1.0%)
+        max_cvcm: Maximum acceptable CVCM percentage (default 0.1%)
+        
+    Returns:
+        JSON string with matching materials and compliance indicators
+    """
+    df = load_outgassing_data()
+    if isinstance(df, str):  # Error message
+        return df
+    
+    # Fuzzy search on Sample Material column (case-insensitive)
+    mask = df['Sample Material'].str.contains(material, case=False, na=False)
+    results = df[mask].copy()
+    
+    if len(results) == 0:
+        return json.dumps({
+            "query": material,
+            "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
+            "results": [],
+            "total_found": 0,
+            "message": "No materials found matching the search term"
+        })
+    
+    # Add compliance indicators
+    results['tml_pass'] = results['TML'] <= max_tml
+    results['cvcm_pass'] = results['CVCM'] <= max_cvcm
+    
+    # Convert to list of dictionaries for JSON serialization
+    materials_list = []
+    for _, row in results.iterrows():
+        materials_list.append({
+            "name": row['Sample Material'],
+            "id": row['ID'],
+            "manufacturer": row['MFR'],
+            "tml": float(row['TML']),
+            "cvcm": float(row['CVCM']),
+            "usage": row['Material Usage'],
+            "tml_pass": bool(row['tml_pass']),
+            "cvcm_pass": bool(row['cvcm_pass'])
+        })
+    
+    return json.dumps({
+        "query": material,
+        "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
+        "results": materials_list,
+        "total_found": len(materials_list)
+    })
+
+@app.tool()
+def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
+    """Search materials by application/usage with outgassing limits
+    
+    Args:
+        application: Application/usage type to search for (e.g., ADHESIVE, POTTING, TAPE)
+        max_tml: Maximum acceptable TML percentage (default 1.0%)
+        max_cvcm: Maximum acceptable CVCM percentage (default 0.1%)
+        
+    Returns:
+        JSON string with materials meeting application and outgassing criteria
+    """
+    df = load_outgassing_data()
+    if isinstance(df, str):  # Error message
+        return df
+    
+    # Filter by application (case-insensitive)
+    app_mask = df['Material Usage'].str.contains(application, case=False, na=False)
+    results = df[app_mask].copy()
+    
+    if len(results) == 0:
+        # Get available applications for user reference
+        available_apps = df['Material Usage'].value_counts().head(10).index.tolist()
+        return json.dumps({
+            "query": application,
+            "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
+            "results": [],
+            "total_found": 0,
+            "message": f"No materials found for application '{application}'",
+            "available_applications": available_apps
+        })
+    
+    # Add compliance indicators
+    results['tml_pass'] = results['TML'] <= max_tml
+    results['cvcm_pass'] = results['CVCM'] <= max_cvcm
+    
+    # Filter to only compliant materials for better results
+    compliant_results = results[results['tml_pass'] & results['cvcm_pass']].copy()
+
+    # Convert to list of dictionaries for JSON serialization
+    materials_list = []
+    for _, row in compliant_results.iterrows():
+        materials_list.append({
+            "name": row['Sample Material'],
+            "id": row['ID'],
+            "manufacturer": row['MFR'],
+            "tml": float(row['TML']),
+            "cvcm": float(row['CVCM']),
+            "usage": row['Material Usage'],
+            "tml_pass": bool(row['tml_pass']),
+            "cvcm_pass": bool(row['cvcm_pass'])
+        })
+    
+    return json.dumps({
+        "query": application,
+        "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
+        "results": materials_list,
+        "total_found": len(results),
+        "showing_only_compliant": True
+    })
 
 if __name__ == "__main__":
-    mcp.run()
+    app.run()
+    
