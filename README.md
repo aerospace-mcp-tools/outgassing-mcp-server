@@ -154,6 +154,13 @@ The server is built with FastMCP and Python 3.14. To modify functionality:
 2. Rebuild the Docker image: `docker build -t outgassing-mcp-server .`
 3. Restart the MCP server in VS Code
 
+## To-do
+1. Implement WVR (True TML = TML - WVR if a WVR appears)
+2. Create instructions for LLMs using tools
+3. Create get tool for seeing database structure and options for categorized columns (application, manufacturer etc...)
+4. Create guidance on what to do if material cannot be found. Difference between exact match, class match, no data
+5. Update documentation. 
+
 ## Support
 
 - **FastMCP Documentation**: https://gofastmcp.com
