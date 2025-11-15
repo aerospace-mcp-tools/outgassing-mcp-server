@@ -597,6 +597,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "pandas" },
     { name = "python-levenshtein" },
+    { name = "rapidfuzz" },
 ]
 
 [package.metadata]
@@ -604,6 +605,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.13.0.2" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "python-levenshtein", specifier = ">=0.27.3" },
+    { name = "rapidfuzz", specifier = ">=3.14.3" },
 ]
 
 [[package]]

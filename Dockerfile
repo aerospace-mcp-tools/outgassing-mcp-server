@@ -4,7 +4,7 @@ FROM python:3.14-slim-trixie
 RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
 
 # Copy Zscaler root certificate if it exists (for corporate networks)
-COPY zscaler-root-ca.cer /tmp/zscaler-root-ca.cer
+COPY zscaler-root-ca.cer* /tmp/zscaler-root-ca.cer
 RUN if [ -s /tmp/zscaler-root-ca.cer ]; then \
         cp /tmp/zscaler-root-ca.cer /usr/local/share/ca-certificates/zscaler-root-ca.crt && \
         update-ca-certificates && \
