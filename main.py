@@ -135,7 +135,9 @@ def get_applications() -> str:
 
 @app.tool()
 def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
-    """Search materials by application/usage with outgassing limits. Get available applications prior to calling this function. 
+    """Search materials by application/usage with outgassing limits.
+    
+    Integration pattern: Call get_applications() to retrieve available application/usage types before invoking this function.
     
     Args:
         application: Application/usage type to search for (e.g., ADHESIVE, POTTING, TAPE)
