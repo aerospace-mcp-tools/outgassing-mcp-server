@@ -7,7 +7,7 @@ from fastmcp import FastMCP
 from rapidfuzz import fuzz, process, utils
 
 # Set constants
-MATCH_THRESHOLD = 90  # Minimum score for fuzzy matching
+MATCH_THRESHOLD = 82  # Minimum score for fuzzy matching
 
 # Create SSL context that will work with corporate certificates
 ssl_context = ssl.create_default_context()
@@ -115,10 +115,29 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
         "total_found": len(materials_list),
         "message": f"Found {len(materials_list)} materials matching the search term"
     })
+    
+@app.tool()
+def get_applications() -> str:
+    """Get a list of unique application/usage types from the outgassing database.
+    
+    Returns:
+        JSON string with list of unique application/usage types
+    """
+    df = load_outgassing_data()
+    if isinstance(df, str):  # Error message
+        return df
+    
+    unique_apps = df['Material Usage'].dropna().unique().tolist()
+    return json.dumps({
+        "total_applications": len(unique_apps),
+        "applications": unique_apps
+    })
 
 @app.tool()
 def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
-    """Search materials by application/usage with outgassing limits. Check database properties prior to calling this function. 
+    """Search materials by application/usage with outgassing limits.
+    
+    Integration pattern: Call get_applications() to retrieve available application/usage types before invoking this function.
     
     Args:
         application: Application/usage type to search for (e.g., ADHESIVE, POTTING, TAPE)
