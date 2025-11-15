@@ -1,8 +1,13 @@
 import ssl
 import urllib.request
 import pandas as pd
+import numpy as np
 import json
 from fastmcp import FastMCP
+from rapidfuzz import fuzz, process, utils
+
+# Set constants
+MATCH_THRESHOLD = 90  # Minimum score for fuzzy matching
 
 # Create SSL context that will work with corporate certificates
 ssl_context = ssl.create_default_context()
@@ -45,20 +50,23 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
     """Search for materials by name with outgassing limits
     
     Args:
-        material: Material name to search for (fuzzy matching)
-        max_tml: Maximum acceptable TML percentage (default 1.0%)
+        material: Material name to search for (rapidfuzz matching)
+        max_tml: Maximum acceptable TML percentage accounting for WVR if present (default 1.0%)
         max_cvcm: Maximum acceptable CVCM percentage (default 0.1%)
         
     Returns:
-        JSON string with matching materials and compliance indicators
+        JSON string with materials matched in the database in order of match quality, outgassing values and TML and CVCM compliance. Maximum 100 results.
     """
     df = load_outgassing_data()
     if isinstance(df, str):  # Error message
         return df
     
-    # Fuzzy search on Sample Material column (case-insensitive)
-    mask = df['Sample Material'].str.contains(material, case=False, na=False)
-    results = df[mask].copy()
+    # Fuzzy search on Sample Material column
+    choices = df['Sample Material'].to_list()
+    matched_materials = process.extract(material, choices, scorer=fuzz.WRatio, processor=utils.default_process, limit=100)
+    matched_names = [match[0] for match in matched_materials if match[1] > MATCH_THRESHOLD]  # Threshold for match quality
+    
+    results = df[df['Sample Material'].isin(matched_names)].copy()
     
     if len(results) == 0:
         return json.dumps({
@@ -70,19 +78,26 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
         })
     
     # Add compliance indicators
-    results['tml_pass'] = results['TML'] <= max_tml
+    # If WVR is present, TML compliance is based on (TML - WVR) othwerwise just TML
+    conditions = [~pd.isna(results['WVR'])]
+    choices = [results['TML'] - results['WVR']]
+    default = results['TML']
+    adjusted_tml = np.select(conditions, choices, default=default)
+    results['tml_pass'] = adjusted_tml <= max_tml
+    # Vectorized approach for CVCM     
     results['cvcm_pass'] = results['CVCM'] <= max_cvcm
     
     # Convert to list of dictionaries for JSON serialization
     materials_list = []
     for _, row in results.iterrows():
         materials_list.append({
-            "name": row['Sample Material'],
+            "sample_material": row['Sample Material'],
             "id": row['ID'],
             "manufacturer": row['MFR'],
             "tml": float(row['TML']),
             "cvcm": float(row['CVCM']),
-            "usage": row['Material Usage'],
+            "wvr": float(row['WVR']) if not pd.isna(row['WVR']) else None,
+            "material_usage": row['Material Usage'],
             "tml_pass": bool(row['tml_pass']),
             "cvcm_pass": bool(row['cvcm_pass'])
         })
@@ -91,12 +106,13 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
         "query": material,
         "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
         "results": materials_list,
-        "total_found": len(materials_list)
+        "total_found": len(materials_list),
+        "message": f"Found {len(materials_list)} materials matching the search term"
     })
 
 @app.tool()
 def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
-    """Search materials by application/usage with outgassing limits
+    """Search materials by application/usage with outgassing limits. Check database properties prior to calling this function. 
     
     Args:
         application: Application/usage type to search for (e.g., ADHESIVE, POTTING, TAPE)
@@ -127,7 +143,13 @@ def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: floa
         })
     
     # Add compliance indicators
-    results['tml_pass'] = results['TML'] <= max_tml
+    # If WVR is present, TML compliance is based on (TML - WVR) othwerwise just TML
+    conditions = [~pd.isna(results['WVR'])]
+    choices = [results['TML'] - results['WVR']]
+    default = results['TML']
+    adjusted_tml = np.select(conditions, choices, default=default)
+    results['tml_pass'] = adjusted_tml <= max_tml
+    # Vectorized approach for CVCM     
     results['cvcm_pass'] = results['CVCM'] <= max_cvcm
     
     # Filter to only compliant materials for better results
@@ -137,12 +159,13 @@ def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: floa
     materials_list = []
     for _, row in compliant_results.iterrows():
         materials_list.append({
-            "name": row['Sample Material'],
+            "sample_material": row['Sample Material'],
             "id": row['ID'],
             "manufacturer": row['MFR'],
             "tml": float(row['TML']),
             "cvcm": float(row['CVCM']),
-            "usage": row['Material Usage'],
+            "wvr": float(row['WVR']) if not pd.isna(row['WVR']) else None,
+            "material_usage": row['Material Usage'],
             "tml_pass": bool(row['tml_pass']),
             "cvcm_pass": bool(row['cvcm_pass'])
         })
@@ -157,4 +180,3 @@ def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: floa
 
 if __name__ == "__main__":
     app.run()
-    
