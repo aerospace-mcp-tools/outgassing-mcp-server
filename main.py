@@ -45,6 +45,16 @@ def load_outgassing_data():
     
     return outgassing_data
 
+def calculate_adjusted_tml(df):
+    """
+    Calculate adjusted TML for compliance: (TML - WVR) if WVR present, else TML.
+    Returns a pandas Series.
+    """
+    conditions = [~pd.isna(df['WVR'])]
+    choices = [df['TML'] - df['WVR']]
+    default = df['TML']
+    return np.select(conditions, choices, default=default)
+
 @app.tool()
 def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
     """Search for materials by name with outgassing limits
@@ -54,7 +64,7 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
         max_tml: Maximum acceptable TML percentage accounting for WVR if present (default 1.0%)
         max_cvcm: Maximum acceptable CVCM percentage (default 0.1%)
         
-    Returns:
+    matched_names = [match[0] for match in matched_materials if match[1] > MATCH_THRESHOLD]
         JSON string with materials matched in the database in order of match quality, outgassing values and TML and CVCM compliance. Maximum 100 results.
     """
     df = load_outgassing_data()
@@ -78,11 +88,7 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
         })
     
     # Add compliance indicators
-    # If WVR is present, TML compliance is based on (TML - WVR) othwerwise just TML
-    conditions = [~pd.isna(results['WVR'])]
-    choices = [results['TML'] - results['WVR']]
-    default = results['TML']
-    adjusted_tml = np.select(conditions, choices, default=default)
+    adjusted_tml = calculate_adjusted_tml(results)
     results['tml_pass'] = adjusted_tml <= max_tml
     # Vectorized approach for CVCM     
     results['cvcm_pass'] = results['CVCM'] <= max_cvcm
@@ -143,11 +149,7 @@ def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: floa
         })
     
     # Add compliance indicators
-    # If WVR is present, TML compliance is based on (TML - WVR) othwerwise just TML
-    conditions = [~pd.isna(results['WVR'])]
-    choices = [results['TML'] - results['WVR']]
-    default = results['TML']
-    adjusted_tml = np.select(conditions, choices, default=default)
+    adjusted_tml = calculate_adjusted_tml(results)
     results['tml_pass'] = adjusted_tml <= max_tml
     # Vectorized approach for CVCM     
     results['cvcm_pass'] = results['CVCM'] <= max_cvcm
