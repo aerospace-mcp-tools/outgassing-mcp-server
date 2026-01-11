@@ -122,7 +122,7 @@ docker run -it --name test -e DISABLE_SSL_VERIFY=true outgassing-mcp-server
 You should see the FastMCP startup banner:
 
 ```
-![image](FastMCP_banner.png)
+![image](https://github.com/aerospace-mcp-tools/outgassing-mcp-server/blob/d70d31ac574a793451c895bdab762af793042409/FastMCP_banner.png)
 ```
 
 Stop the test container:
