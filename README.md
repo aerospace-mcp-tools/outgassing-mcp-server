@@ -298,7 +298,6 @@ outgassing-mcp-server/
 
 **Data loading errors:**
 - Check internet connectivity for online CSV access
-- Verify `Outgassing_Db_rows.csv` exists in project root for offline fallback
 - Review container logs for SSL/certificate errors
 
 ### VS Code Integration Issues
@@ -312,7 +311,7 @@ outgassing-mcp-server/
 
 **Server appears but tools don't work:**
 - Rebuild the Docker image to ensure latest code
-- Check that FastMCP banner shows 3 tools on startup
+- Check that FastMCP banner shows on startup
 - Verify network connectivity for NASA database access
 - Test tools manually: `docker run -it --name test outgassing-mcp-server`
 
@@ -322,25 +321,12 @@ outgassing-mcp-server/
 - Ensure the correct root certificate is placed as `zscaler-root-ca.cer` in project root
 - Set `DISABLE_SSL_VERIFY=true` environment variable when running the container
 - Verify certificate format is PEM/CRT compatible (text file starting with `-----BEGIN CERTIFICATE-----`)
-- Contact your IT department for the correct certificate file
 - Rebuild Docker image after adding certificate: `docker build -t outgassing-mcp-server .`
 - **Both certificate installation AND environment variable are required for corporate networks**
 
 **Proxy blocking connections:**
 - Some corporate proxies may block Docker container network access
 - Try using `--network host` flag (already included in recommended command)
-- Consult IT department about Docker networking policies
-
-### Data Quality Issues
-
-**No results found:**
-- Use `get_applications` tool first to see available categories
-- Try broader search terms (fuzzy matching requires 82/100 similarity)
-
-**Unexpected compliance results:**
-- Server accounts for WVR (Water Vapor Regained) in TML calculations
-- Adjusted TML = TML - WVR when WVR is present
-- Check individual `tml_pass` and `cvcm_pass` flags in results
 
 ## Technical Details
 
@@ -366,7 +352,7 @@ For detailed security information, including SSL verification, vulnerability rep
 - **MCP Protocol Specification**: https://modelcontextprotocol.io
 - **Docker Documentation**: https://docs.docker.com
 - **NASA Outgassing Database**: https://etd.gsfc.nasa.gov/capabilities/outgassing-database/
-- **NASA-STD-6016**: Low-Outgassing Materials Standard
+- **NASA-STD-6016**: Standard Materials and Processes Requirements for Spacecraft
 
 ## Project Documentation
 
