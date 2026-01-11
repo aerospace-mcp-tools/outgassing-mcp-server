@@ -58,16 +58,19 @@ def new_tool(param: str, max_val: float = 1.0) -> str:
 
 ## Corporate Network Quirks
 
-### SSL Context Workaround
-[main.py](main.py#L11-L19) **must** disable SSL verification:
+### SSL Context Conditional Verification
+[main.py](main.py#L11-L21) implements **conditional** SSL verification:
 ```python
 ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False  # Required for corporate proxies
-ssl_context.verify_mode = ssl.CERT_NONE
+if os.getenv("DISABLE_SSL_VERIFY", "false").lower() == "true":
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
 ```
 - **Why**: Zscaler/corporate proxies break certificate chains
+- **How**: Set `DISABLE_SSL_VERIFY=true` environment variable when running container
 - **Certificate**: Place `zscaler-root-ca.cer` in project root (auto-detected by [Dockerfile](Dockerfile#L6-L13))
-- **Never remove this**: Data loading will fail behind corporate firewalls
+- **Both required**: Corporate networks need certificate installation AND environment variable
+- **Default**: Standard SSL verification enabled (secure by default)
 
 ### UV Package Manager
 [Dockerfile](Dockerfile#L19-L20) uses `uv` not `pip`:
@@ -87,7 +90,7 @@ RUN uv sync  # NOT pip install
 **Error handling**: Returns error string instead of DataFrame if both fail
 
 ## Key Files
-- [main.py](main.py): Complete MCP server (203 lines, 3 tools)
+- [main.py](main.py): Complete MCP server (205 lines, 3 tools)
 - [Dockerfile](Dockerfile): Multi-stage build with certificate injection
 - [pyproject.toml](pyproject.toml): Dependencies (fastmcp, pandas, rapidfuzz)
 - `.gitignore`: Excludes `zscaler-root-ca.cer`, `Outgassing_Db_rows.csv`
@@ -105,12 +108,17 @@ Located at `%APPDATA%\Code\User\mcp.json`:
   }
 }
 ```
+**For corporate networks**, add `-e` and `DISABLE_SSL_VERIFY=true` to args:
+```json
+"args": ["run", "--rm", "-i", "--network", "host", "-e", "DISABLE_SSL_VERIFY=true", "outgassing-mcp-server"]
+```
 - `--network host`: Required for stdio transport
 - `--rm`: Auto-cleanup (prevents container accumulation)
+- `-e DISABLE_SSL_VERIFY=true`: Corporate proxy SSL workaround
 
 ## Common Pitfalls
 1. **Forgetting WVR adjustment**: Always use `calculate_adjusted_tml()` for compliance
-2. **Removing SSL workaround**: Corporate networks require disabled verification
+2. **Missing SSL environment variable**: Corporate networks require both certificate AND `DISABLE_SSL_VERIFY=true`
 3. **Using pip instead of uv**: Dependencies managed via `pyproject.toml` + `uv.lock`
 4. **Not restarting VS Code**: MCP client caches server configuration
 5. **Wrong fuzzy threshold**: 82 is calibrated for aerospace naming; lower = noise, higher = misses
