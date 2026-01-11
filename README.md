@@ -1,5 +1,10 @@
 # Outgassing MCP Server
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![MCP](https://img.shields.io/badge/MCP-FastMCP-green.svg)](https://gofastmcp.com)
+[![Docker](https://img.shields.io/badge/docker-required-blue.svg)](https://www.docker.com/)
+
 A Model Context Protocol (MCP) server that provides access to NASA's outgassing database for aerospace material selection. This server enables querying of material outgassing properties (TML, CVCM, WVR) through VS Code's GitHub Copilot Chat.
 
 ## Overview
