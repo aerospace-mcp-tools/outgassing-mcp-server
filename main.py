@@ -1,4 +1,5 @@
 import ssl
+import os
 import urllib.request
 import pandas as pd
 import numpy as np
@@ -9,15 +10,16 @@ from rapidfuzz import fuzz, process, utils
 # Set constants
 MATCH_THRESHOLD = 82  # Minimum score for fuzzy matching
 
-# Create SSL context that will work with corporate certificates
+# Create SSL context with conditional verification
+# Only disable SSL verification if explicitly requested via environment variable
 ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
-
-# Install custom HTTPS handler
-https_handler = urllib.request.HTTPSHandler(context=ssl_context)
-opener = urllib.request.build_opener(https_handler)
-urllib.request.install_opener(opener)
+if os.getenv("DISABLE_SSL_VERIFY", "false").lower() == "true":
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    # Install custom HTTPS handler only when verification is disabled
+    https_handler = urllib.request.HTTPSHandler(context=ssl_context)
+    opener = urllib.request.build_opener(https_handler)
+    urllib.request.install_opener(opener)
 
 app = FastMCP("outgassing-mcp-server")
 
