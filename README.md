@@ -87,6 +87,9 @@ If you're behind a corporate firewall using Zscaler or similar proxy:
 1. Obtain your organization's root certificate
 2. Copy the certificate file to the repository root
 3. Rename it to `zscaler-root-ca.cer`
+4. Set the `DISABLE_SSL_VERIFY` environment variable to `true` when running the container (see below)
+
+**Note**: See [SECURITY.md](SECURITY.md#ssl-verification) for detailed information about SSL security considerations.
 
 ### 2. Build the Docker Image
 
@@ -110,24 +113,16 @@ Test that the server builds and runs correctly:
 docker run -it --name test outgassing-mcp-server
 ```
 
-You should see the FastMCP startup banner listing 3 tools:
+**For corporate networks**, include the SSL environment variable:
+
+```bash
+docker run -it --name test -e DISABLE_SSL_VERIFY=true outgassing-mcp-server
+```
+
+You should see the FastMCP startup banner:
 
 ```
-                          ╭──────────────────────────────────────────────────────────────────────────────╮
-                          │                                                                              │
-                          │                         ▄▀▀ ▄▀█ █▀▀ ▀█▀ █▀▄▀█ █▀▀ █▀█                        │
-                          │                         █▀  █▀█ ▄▄█  █  █ ▀ █ █▄▄ █▀▀                        │
-                          │                                                                              │
-                          │                               FastMCP 2.13.0.2                               │
-                          │                                                                              │
-                          │                                                                              │
-                          │                    🖥  Server name: outgassing-mcp-server                    │
-                          │                                                                              │
-                          │                    📦 Transport:   STDIO                                     │
-                          │                                                                              │
-                          │                    🔧 Tools:       3                                         │
-                          │                                                                              │
-                          ╰──────────────────────────────────────────────────────────────────────────────╯
+![image](FastMCP_banner.png)
 ```
 
 Stop the test container:
@@ -145,6 +140,10 @@ docker stop test && docker rm test
 4. Enter the Docker command:
    ```
    docker run --rm -i --network host outgassing-mcp-server
+   ```
+   **For corporate networks**, add the SSL environment variable:
+   ```
+   docker run --rm -i --network host -e DISABLE_SSL_VERIFY=true outgassing-mcp-server
    ```
 5. Name the server: `outgassing-mcp-server`
 6. The server will be automatically added to your MCP configuration
@@ -169,6 +168,29 @@ Add the following configuration:
         "-i",
         "--network",
         "host",
+        "outgassing-mcp-server"
+      ]
+    }
+  }
+}
+```
+
+**For corporate networks**, add the environment variable to the args:
+
+```json
+{
+  "servers": {
+    "outgassing-mcp-server": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--network",
+        "host",
+        "-e",
+        "DISABLE_SSL_VERIFY=true",
         "outgassing-mcp-server"
       ]
     }
@@ -225,9 +247,30 @@ Once integrated with VS Code, you can query the server through Copilot Chat:
 - `--rm`: Automatically remove container when it exits (prevents container buildup)
 - `-i`: Keep STDIN open for interactive communication with MCP protocol
 - `--network host`: Use host networking for seamless VS Code stdio communication
+- `-e DISABLE_SSL_VERIFY=true`: (Corporate networks only) Disables SSL certificate verification for proxy compatibility
 - `outgassing-mcp-server`: The Docker image name built in earlier steps
 
-## Development
+### Environment Variables
+
+#### `DISABLE_SSL_VERIFY`
+
+**Purpose**: Controls SSL certificate verification when loading data from NASA's servers.
+
+**When to use**: Required when behind corporate proxies (Zscaler, etc.) that intercept HTTPS traffic and replace certificates.
+
+**Values**:
+- `true`: Disables SSL verification (required for corporate networks)
+- `false` or unset (default): Uses standard SSL verification
+
+**Security note**: Only disable SSL verification when necessary for corporate network compatibility. The server loads data from NASA's official database, but disabling verification should be limited to trusted network environments.
+
+## Development & Contributing
+
+Interested in contributing to this project? Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Development setup instructions
+- Testing procedures
+- Code guidelines
+- How to submit changes
 
 ### Project Structure
 ```
@@ -237,47 +280,10 @@ outgassing-mcp-server/
 ├── pyproject.toml             # Dependencies (fastmcp, pandas, rapidfuzz)
 ├── Outgassing_Db_rows.csv    # Local data cache (12,859 materials)
 ├── README.md                  # This file
+├── CONTRIBUTING.md            # Contribution guidelines
+├── SECURITY.md                # Security policy and considerations
 └── .github/
     └── copilot-instructions.md  # Development guidelines for LLMs
-```
-
-### Modifying the Server
-
-To add new tools or modify existing functionality:
-
-1. **Edit** `main.py` to add new `@app.tool()` decorated functions
-2. **Rebuild** the Docker image: `docker build -t outgassing-mcp-server .`
-3. **Test** the changes: `docker run -it --name test outgassing-mcp-server`
-4. **Verify** tool count in FastMCP startup banner
-5. **Clean up** test container: `docker stop test && docker rm test`
-6. **Restart** VS Code to reload the MCP client connection
-
-### Adding a New Tool Example
-
-```python
-@app.tool()
-def get_manufacturers(application: str = None) -> str:
-    """Get list of manufacturers, optionally filtered by application
-    
-    Args:
-        application: Optional application type to filter by
-        
-    Returns:
-        JSON string with manufacturer list
-    """
-    df = load_outgassing_data()
-    if isinstance(df, str):
-        return df
-    
-    if application:
-        df = df[df['Material Usage'].str.contains(application, case=False, na=False)]
-    
-    manufacturers = df['MFR'].dropna().unique().tolist()
-    return json.dumps({
-        "application": application,
-        "total_manufacturers": len(manufacturers),
-        "manufacturers": manufacturers
-    })
 ```
 
 ## Troubleshooting
@@ -314,9 +320,11 @@ def get_manufacturers(application: str = None) -> str:
 
 **SSL certificate errors:**
 - Ensure the correct root certificate is placed as `zscaler-root-ca.cer` in project root
+- Set `DISABLE_SSL_VERIFY=true` environment variable when running the container
 - Verify certificate format is PEM/CRT compatible (text file starting with `-----BEGIN CERTIFICATE-----`)
 - Contact your IT department for the correct certificate file
 - Rebuild Docker image after adding certificate: `docker build -t outgassing-mcp-server .`
+- **Both certificate installation AND environment variable are required for corporate networks**
 
 **Proxy blocking connections:**
 - Some corporate proxies may block Docker container network access
@@ -344,9 +352,12 @@ def get_manufacturers(application: str = None) -> str:
 - **python-levenshtein**: ≥0.27.3 (string distance calculations)
 
 ### Security Considerations
-- SSL verification disabled for corporate proxy compatibility
+
+For detailed security information, including SSL verification, vulnerability reporting, and privacy considerations, please see [SECURITY.md](SECURITY.md).
+
+**Key points:**
+- SSL verification can be conditionally disabled via `DISABLE_SSL_VERIFY=true` for corporate proxy compatibility
 - No authentication required (local VS Code integration)
-- No external network access required after data load (uses local cache)
 - Container runs with default user (non-root when possible)
 
 ## Support & Resources
@@ -357,9 +368,12 @@ def get_manufacturers(application: str = None) -> str:
 - **NASA Outgassing Database**: https://data.nasa.gov/docs/legacy/Outgassing_Db/
 - **NASA-STD-6016**: Low-Outgassing Materials Standard
 
-## License
+## Project Documentation
 
-See LICENSE file for details.
+- [CONTRIBUTING.md](CONTRIBUTING.md) - How to contribute to this project
+- [SECURITY.md](SECURITY.md) - Security policy and vulnerability reporting
+- [LICENSE](LICENSE) - Apache 2.0 License details
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - Community guidelines
 
 ## Acknowledgments
 
