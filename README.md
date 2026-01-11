@@ -365,7 +365,7 @@ For detailed security information, including SSL verification, vulnerability rep
 - **FastMCP Documentation**: https://gofastmcp.com
 - **MCP Protocol Specification**: https://modelcontextprotocol.io
 - **Docker Documentation**: https://docs.docker.com
-- **NASA Outgassing Database**: https://data.nasa.gov/docs/legacy/Outgassing_Db/
+- **NASA Outgassing Database**: https://etd.gsfc.nasa.gov/capabilities/outgassing-database/
 - **NASA-STD-6016**: Low-Outgassing Materials Standard
 
 ## Project Documentation
