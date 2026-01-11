@@ -66,7 +66,7 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
         max_tml: Maximum acceptable TML percentage accounting for WVR if present (default 1.0%)
         max_cvcm: Maximum acceptable CVCM percentage (default 0.1%)
         
-    matched_names = [match[0] for match in matched_materials if match[1] > MATCH_THRESHOLD]
+    Returns:
         JSON string with materials matched in the database in order of match quality, outgassing values and TML and CVCM compliance. Maximum 100 results.
     """
     df = load_outgassing_data()
