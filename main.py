@@ -120,10 +120,10 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
     
 @app.tool()
 def get_applications() -> str:
-    """Get a list of unique application/usage types from the outgassing database.
+    """Get a list of unique material application/usage types from the outgassing database.
     
     Returns:
-        JSON string with list of unique application/usage types
+        JSON string with list of unique material application/usage types
     """
     df = load_outgassing_data()
     if isinstance(df, str):  # Error message
