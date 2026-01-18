@@ -5,11 +5,11 @@
 [![MCP](https://img.shields.io/badge/MCP-FastMCP-green.svg)](https://gofastmcp.com)
 [![Docker](https://img.shields.io/badge/docker-required-blue.svg)](https://www.docker.com/)
 
-A Model Context Protocol (MCP) server that provides access to NASA's outgassing database for aerospace material selection. This server enables querying of material outgassing properties (TML, CVCM, WVR) through VS Code's GitHub Copilot Chat.
+A Model Context Protocol (MCP) server that provides access to NASA's outgassing database for aerospace material selection. This server enables querying of material outgassing properties (TML, CVCM, WVR) by compatible large language models.
 
 ## Overview
 
-This production-ready MCP server is built with [FastMCP](https://gofastmcp.com) and containerized with Docker. It provides three tools for querying 12,859 aerospace materials from NASA's outgassing database, with intelligent fuzzy search and automatic compliance checking against NASA-STD-6016 standards.
+This MCP server is built with [FastMCP](https://gofastmcp.com) and containerized with Docker. It provides three tools for querying 13,582 aerospace materials from NASA's outgassing database, with intelligent fuzzy search and automatic compliance checking against NASA-STD-6016 standards.
 
 ## Features
 
@@ -34,7 +34,7 @@ Search for materials by name with fuzzy matching and compliance validation.
 
 **Example usage in Copilot Chat:**
 ```
-@outgassing-mcp-server search for RTV adhesives with TML under 0.5%
+Check the outgassing-mcp-server for RTV adhesives with TML under 0.5%.
 ```
 
 ### 2. `get_applications`
@@ -42,11 +42,11 @@ Retrieve all unique application/usage types from the database.
 
 **Parameters:** None
 
-**Returns:** List of all available application categories (45 unique types)
+**Returns:** List of all available application categories (961 unique types)
 
 **Example usage in Copilot Chat:**
 ```
-@outgassing-mcp-server what application types are available?
+Check the outgassing-mcp-server to see what material application types are listed?
 ```
 
 ### 3. `search_by_application`
@@ -61,16 +61,17 @@ Search materials by application type, returning only compliant materials.
 
 **Example usage in Copilot Chat:**
 ```
-@outgassing-mcp-server find compliant adhesives for spacecraft use
+Check the outgassing-mcp-server to find compliant adhesives for spacecraft use.
 ```
 
 ## Understanding Outgassing Data
 
 - **TML (Total Mass Loss)**: Percentage of material mass lost in vacuum
-- **CVCM (Collected Volatile Condensable Material)**: Percentage that condenses on surfaces
-- **WVR (Water Vapor Regained)**: Water content that affects TML calculation
-- **NASA-STD-6016**: Requires TML ≤ 1.0% and CVCM ≤ 0.1% (after WVR adjustment)
-- **Adjusted TML**: TML - WVR (used for compliance when WVR is present)
+- **CVCM (Collected Volatile Condensable Material)**: Percentage that condenses on a collector
+- **WVR (Water Vapor Recovery)**: Mass of water vapour regained by specimen following outgassing
+- **NASA-STD-6016**: [MPR 95] Requires TML ≤ 1.0% and CVCM ≤ 0.1% (after WVR adjustment) 
+- **Adjusted TML**: TML - WVR Used when absorbed water lost does not affect functionality
+- **Special Cases**: Contamination sensitive surfaces such as optical lenses may require a lower CVCM than the above 
 
 ## Prerequisites
 
@@ -79,6 +80,14 @@ Search materials by application type, returning only compliant materials.
 - **Network Access**: Internet connectivity for downloading dependencies (corporate networks may require additional certificate setup)
 
 ## Installation & Setup
+
+### 1. Clone the repository locally
+
+Navigate to the location you wish to store the repository and clone it:
+
+```bash
+git clone https://github.com/aerospace-mcp-tools/outgassing-mcp-server.git
+```
 
 ### 1. Certificate Setup (Corporate Networks Only)
 
@@ -121,16 +130,17 @@ docker run -it --name test -e DISABLE_SSL_VERIFY=true outgassing-mcp-server
 
 You should see the FastMCP startup banner:
 
-```
 ![FastMCP Banner](FastMCP_banner.png)
-```
 
-Stop the test container:
+Stop the test container and clean up:
 ```bash
-docker stop test && docker rm test
+docker stop test
+docker rm test
 ```
 
 ## VS Code Integration
+
+This MCP server works with any MCP-compatible client that supports stdio transport. Each client will have its own configuration file location and JSON structure, but all use the same Docker container and command. The example given below shows integration with Github Copilot on VS Code.
 
 ### Method 1: Using VS Code Command Palette (Recommended)
 
@@ -202,43 +212,15 @@ Add the following configuration:
 
 1. Restart VS Code after configuration
 2. Open GitHub Copilot Chat
-3. Type `@` and you should see `outgassing-mcp-server` in the available servers list
-4. Test with a query like: `@outgassing-mcp-server search for Kapton materials`
-
-## Usage Examples
-
-Once integrated with VS Code, you can query the server through Copilot Chat:
-
-**Find specific materials:**
-```
-@outgassing-mcp-server search for Kapton polyimide film
-@outgassing-mcp-server find RTV silicone adhesives with strict limits
-```
-
-**Discover applications:**
-```
-@outgassing-mcp-server list all application categories
-```
-
-**Application-based search:**
-```
-@outgassing-mcp-server find compliant potting compounds
-@outgassing-mcp-server show me aerospace-grade tapes
-@outgassing-mcp-server which paints meet NASA standards?
-```
-
-**Custom compliance limits:**
-```
-@outgassing-mcp-server find adhesives with TML under 0.5% and CVCM under 0.05%
-```
+3. Test the mcp server with an example from above!
 
 ## Data Source
 
 - **Database**: NASA Outgassing Database (12,859 materials)
-- **Online Source**: https://data.nasa.gov/docs/legacy/Outgassing_Db/Outgassing_Db_rows.csv
+- **Online Source**: https://catalog.data.gov/dataset/outgassing-db
 - **Local Cache**: `Outgassing_Db_rows.csv` (automatic fallback)
-- **Standards**: NASA-STD-6016 (Low-Outgassing Materials)
-- **Compliance Rate**: ~45.9% of materials meet TML≤1.0% + CVCM≤0.1%
+- **Standards**: NASA-STD-6016 (Standard Materials and Process Requirements for Spacecraft)
+- **Notes**: More information on the NASA outgassing database is given here: https://etd.gsfc.nasa.gov/capabilities/outgassing-database/
 
 ## Configuration Details
 
@@ -275,7 +257,7 @@ Interested in contributing to this project? Please see [CONTRIBUTING.md](CONTRIB
 ### Project Structure
 ```
 outgassing-mcp-server/
-├── main.py                    # FastMCP server with 3 tools
+├── main.py                    # FastMCP server 
 ├── Dockerfile                 # Multi-stage build with cert support
 ├── pyproject.toml             # Dependencies (fastmcp, pandas, rapidfuzz)
 ├── Outgassing_Db_rows.csv    # Local data cache (12,859 materials)
@@ -323,10 +305,6 @@ outgassing-mcp-server/
 - Verify certificate format is PEM/CRT compatible (text file starting with `-----BEGIN CERTIFICATE-----`)
 - Rebuild Docker image after adding certificate: `docker build -t outgassing-mcp-server .`
 - **Both certificate installation AND environment variable are required for corporate networks**
-
-**Proxy blocking connections:**
-- Some corporate proxies may block Docker container network access
-- Try using `--network host` flag (already included in recommended command)
 
 ## Technical Details
 
