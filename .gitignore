@@ -209,8 +209,8 @@ __marimo__/
 # Development container files
 .devcontainer/
 
-# Zscaler certifications
-zscaler-root-ca.cer
+# Zscaler certificate
+zscaler-root-ca.crt
 
 # Local database cache
 Outgassing_Db_rows.csv

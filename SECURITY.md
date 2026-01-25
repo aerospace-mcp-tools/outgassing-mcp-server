@@ -29,31 +29,9 @@ Instead:
 
 ## Security Considerations
 
-### SSL Verification
+### Zscaler setup
 
-This project **intentionally disables SSL certificate verification** to work behind corporate proxies:
-
-```python
-ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
-```
-
-**Why this is necessary:**
-- Corporate proxies (Zscaler, etc.) intercept HTTPS traffic
-- Certificate chains are broken by man-in-the-middle proxies
-- Data loading from NASA's servers would fail without this
-
-**Risks and mitigations:**
-- **Risk**: Susceptible to MITM attacks during data download
-- **Mitigation**: Data source is public NASA database (non-sensitive)
-- **Mitigation**: Data is read-only, no credentials transmitted
-- **Alternative**: Users can place local `Outgassing_Db_rows.csv` in project root (fallback mechanism)
-
-**If you need stricter SSL:**
-1. Place your corporate root certificate (e.g., `zscaler-root-ca.cer`) in project root
-2. The [Dockerfile](Dockerfile) will auto-install it during build
-3. Submit a PR to make SSL verification configurable via environment variable
+This container is configured to work with Zscaler. This is done by installing your organizations root certificate into the root directory of this project and configuring it when the Docker image is built. For more information please see [Using Docker with Zscaler](https://docs.docker.com/guides/zscaler/).
 
 ### Docker Security
 
@@ -75,17 +53,8 @@ Dependencies are managed via `uv` and pinned in `uv.lock`:
 - `fastmcp`: MCP server framework
 - `pandas`: Data manipulation
 - `rapidfuzz`: Fuzzy string matching
-- `openpyxl`: Excel file support
 
 Dependency updates are reviewed but may be infrequent due to free-time maintenance.
-
-## Known Non-Issues
-
-These are **not** security vulnerabilities:
-- Disabled SSL verification (by design for corporate networks)
-- Missing authentication (public data, no need)
-- Missing rate limiting (local execution only)
-- Docker container network access (required for stdio transport)
 
 ## Security Updates
 
