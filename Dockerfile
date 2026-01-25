@@ -1,16 +1,17 @@
 FROM python:3.14-slim-trixie
 
-# Install ca-certificates and update
-RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+# Install ca-certificates
+RUN apt-get update && \
+ apt-get install -y ca-certificates
 
-# Copy Zscaler root certificate if it exists (for corporate networks)
-COPY zscaler-root-ca.cer* /tmp/zscaler-root-ca.cer
-RUN if [ -s /tmp/zscaler-root-ca.cer ]; then \
-        cp /tmp/zscaler-root-ca.cer /usr/local/share/ca-certificates/zscaler-root-ca.crt && \
+ # Copy Zscaler root certificate if it exists (for corporate networks)
+COPY zscaler-root-ca.crt* /usr/local/share/ca-certificates/zscaler-root-ca.crt
+# Install Zscaler cerificate if it is populated
+RUN if [ -s /usr/local/share/ca-certificates/zscaler-root-ca.crt ]; then \
         update-ca-certificates && \
         echo "Zscaler certificate installed successfully"; \
     else \
-        echo "No Zscaler certificate found or file is empty - skipping (this is OK if not behind Zscaler)"; \
+        echo "No Zscaler certificate found - skipping"; \
     fi
 
 # Set environment variables for Python/pip to use system certificates
@@ -23,6 +24,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Copy the project into the image
 ADD . /app
+
+# Download outgassing data
+ADD https://data.nasa.gov/docs/legacy/Outgassing_Db/Outgassing_Db_rows.csv /app/data/Outgassing_Db_rows.csv
 
 # Sync the project into a new environment, asserting the lockfile is up to date
 WORKDIR /app

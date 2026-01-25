@@ -18,7 +18,6 @@ This MCP server is built with [FastMCP](https://gofastmcp.com) and containerized
 - **Compliance Checking**: Automatic TML/CVCM validation with WVR adjustment
 - **VS Code Integration**: Seamless access through GitHub Copilot Chat
 - **Corporate Network Support**: Built-in Zscaler certificate handling
-- **Offline Capable**: Falls back to local CSV cache when online source unavailable
 
 ## Available Tools
 
@@ -95,10 +94,9 @@ If you're behind a corporate firewall using Zscaler or similar proxy:
 
 1. Obtain your organization's root certificate
 2. Copy the certificate file to the repository root
-3. Rename it to `zscaler-root-ca.cer`
-4. Set the `DISABLE_SSL_VERIFY` environment variable to `true` when running the container (see below)
+3. Rename it to `zscaler-root-ca.crt`
 
-**Note**: See [SECURITY.md](SECURITY.md#ssl-verification) for detailed information about SSL security considerations.
+See [SECURITY.md](SECURITY.md) for using Docker with Zscaler
 
 ### 2. Build the Docker Image
 
@@ -111,7 +109,7 @@ docker build -t outgassing-mcp-server .
 This command:
 - Downloads Python 3.14 base image
 - Installs required dependencies using UV package manager
-- Configures SSL certificates for corporate networks
+- Configures Docker for Zscaler
 - Sets up the FastMCP server environment
 
 ### 3. Verify Installation
@@ -120,12 +118,6 @@ Test that the server builds and runs correctly:
 
 ```bash
 docker run -it --name test outgassing-mcp-server
-```
-
-**For corporate networks**, include the SSL environment variable:
-
-```bash
-docker run -it --name test -e DISABLE_SSL_VERIFY=true outgassing-mcp-server
 ```
 
 You should see the FastMCP startup banner:
@@ -150,10 +142,6 @@ This MCP server works with any MCP-compatible client that supports stdio transpo
 4. Enter the Docker command:
    ```
    docker run --rm -i --network host outgassing-mcp-server
-   ```
-   **For corporate networks**, add the SSL environment variable:
-   ```
-   docker run --rm -i --network host -e DISABLE_SSL_VERIFY=true outgassing-mcp-server
    ```
 5. Name the server: `outgassing-mcp-server`
 6. The server will be automatically added to your MCP configuration
@@ -185,29 +173,6 @@ Add the following configuration:
 }
 ```
 
-**For corporate networks**, add the environment variable to the args:
-
-```json
-{
-  "servers": {
-    "outgassing-mcp-server": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "--network",
-        "host",
-        "-e",
-        "DISABLE_SSL_VERIFY=true",
-        "outgassing-mcp-server"
-      ]
-    }
-  }
-}
-```
-
 ### Verification
 
 1. Restart VS Code after configuration
@@ -229,22 +194,7 @@ Add the following configuration:
 - `--rm`: Automatically remove container when it exits (prevents container buildup)
 - `-i`: Keep STDIN open for interactive communication with MCP protocol
 - `--network host`: Use host networking for seamless VS Code stdio communication
-- `-e DISABLE_SSL_VERIFY=true`: (Corporate networks only) Disables SSL certificate verification for proxy compatibility
 - `outgassing-mcp-server`: The Docker image name built in earlier steps
-
-### Environment Variables
-
-#### `DISABLE_SSL_VERIFY`
-
-**Purpose**: Controls SSL certificate verification when loading data from NASA's servers.
-
-**When to use**: Required when behind corporate proxies (Zscaler, etc.) that intercept HTTPS traffic and replace certificates.
-
-**Values**:
-- `true`: Disables SSL verification (required for corporate networks)
-- `false` or unset (default): Uses standard SSL verification
-
-**Security note**: Only disable SSL verification when necessary for corporate network compatibility. The server loads data from NASA's official database, but disabling verification should be limited to trusted network environments.
 
 ## Development & Contributing
 
@@ -257,13 +207,14 @@ Interested in contributing to this project? Please see [CONTRIBUTING.md](CONTRIB
 ### Project Structure
 ```
 outgassing-mcp-server/
-├── main.py                    # FastMCP server 
-├── Dockerfile                 # Multi-stage build with cert support
-├── pyproject.toml             # Dependencies (fastmcp, pandas, rapidfuzz)
-├── Outgassing_Db_rows.csv    # Local data cache (12,859 materials)
-├── README.md                  # This file
-├── CONTRIBUTING.md            # Contribution guidelines
-├── SECURITY.md                # Security policy and considerations
+├── main.py                       # FastMCP server 
+├── Dockerfile                    # Multi-stage build with cert support
+├── pyproject.toml                # Dependencies (fastmcp, pandas, rapidfuzz)
+├── data/
+|   └── Outgassing_Db_rows.csv    # Local data cache (12,859 materials)
+├── README.md                     # This file
+├── CONTRIBUTING.md               # Contribution guidelines
+├── SECURITY.md                   # Security policy and considerations
 └── .github/
     └── copilot-instructions.md  # Development guidelines for LLMs
 ```
@@ -272,15 +223,15 @@ outgassing-mcp-server/
 
 ### Container Issues
 
+**Stale data issues:**
+- Outgassing data is only downloaded when container is built
+- Re-build container to get latest data
+
 **Container fails to start:**
 - Verify Docker is running: `docker --version`
 - Check image exists: `docker images | grep outgassing-mcp-server`
 - Review build logs for errors during image creation
 - Test manually: `docker run -it --name test outgassing-mcp-server`
-
-**Data loading errors:**
-- Check internet connectivity for online CSV access
-- Review container logs for SSL/certificate errors
 
 ### VS Code Integration Issues
 
@@ -294,17 +245,7 @@ outgassing-mcp-server/
 **Server appears but tools don't work:**
 - Rebuild the Docker image to ensure latest code
 - Check that FastMCP banner shows on startup
-- Verify network connectivity for NASA database access
 - Test tools manually: `docker run -it --name test outgassing-mcp-server`
-
-### Corporate Network Issues
-
-**SSL certificate errors:**
-- Ensure the correct root certificate is placed as `zscaler-root-ca.cer` in project root
-- Set `DISABLE_SSL_VERIFY=true` environment variable when running the container
-- Verify certificate format is PEM/CRT compatible (text file starting with `-----BEGIN CERTIFICATE-----`)
-- Rebuild Docker image after adding certificate: `docker build -t outgassing-mcp-server .`
-- **Both certificate installation AND environment variable are required for corporate networks**
 
 ## Technical Details
 
@@ -313,14 +254,12 @@ outgassing-mcp-server/
 - **FastMCP**: ≥2.13.0.2 (MCP protocol implementation)
 - **pandas**: ≥2.3.3 (data processing)
 - **rapidfuzz**: ≥3.14.3 (fuzzy string matching)
-- **python-levenshtein**: ≥0.27.3 (string distance calculations)
 
 ### Security Considerations
 
-For detailed security information, including SSL verification, vulnerability reporting, and privacy considerations, please see [SECURITY.md](SECURITY.md).
+For detailed security information, including vulnerability reporting, and privacy considerations, please see [SECURITY.md](SECURITY.md).
 
 **Key points:**
-- SSL verification can be conditionally disabled via `DISABLE_SSL_VERIFY=true` for corporate proxy compatibility
 - No authentication required (local VS Code integration)
 - Container runs with default user (non-root when possible)
 

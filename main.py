@@ -1,6 +1,4 @@
-import ssl
 import os
-import urllib.request
 import pandas as pd
 import numpy as np
 import json
@@ -10,41 +8,25 @@ from rapidfuzz import fuzz, process, utils
 # Set constants
 MATCH_THRESHOLD = 82  # Minimum score for fuzzy matching
 
-# Create SSL context with conditional verification
-# Only disable SSL verification if explicitly requested via environment variable
-ssl_context = ssl.create_default_context()
-if os.getenv("DISABLE_SSL_VERIFY", "false").lower() == "true":
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-    # Install custom HTTPS handler only when verification is disabled
-    https_handler = urllib.request.HTTPSHandler(context=ssl_context)
-    opener = urllib.request.build_opener(https_handler)
-    urllib.request.install_opener(opener)
-
 app = FastMCP("outgassing-mcp-server")
 
 # Global data cache
 outgassing_data = None
 
 def load_outgassing_data():
-    """Load data with online/local fallback pattern"""
+    """Load data."""
     global outgassing_data
     if outgassing_data is not None:
         return outgassing_data
     
-    url = "https://data.nasa.gov/docs/legacy/Outgassing_Db/Outgassing_Db_rows.csv"
-    local_file = "Outgassing_Db_rows.csv"
+    local_file = "data/Outgassing_Db_rows.csv"
     
     try:
-        outgassing_data = pd.read_csv(url)
-        print("Loaded outgassing data from online source")
+        outgassing_data = pd.read_csv(local_file)
+        print("Loaded outgassing data from local cache")
     except Exception as e:
-        try:
-            outgassing_data = pd.read_csv(local_file)
-            print("Loaded outgassing data from local cache")
-        except Exception as local_e:
-            return f"Error: Unable to load outgassing data - Online: {str(e)}, Local: {str(local_e)}"
-    
+        return f"Error: Unable to load outgassing data - {str(e)}"
+
     return outgassing_data
 
 def calculate_adjusted_tml(df):
