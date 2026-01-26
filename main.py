@@ -40,16 +40,20 @@ def calculate_adjusted_tml(df):
     return np.select(conditions, choices, default=default)
 
 @app.tool()
-def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
+def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1, 
+                    limit: int = 10, compliant_only: bool = True, include_details: bool = True) -> str:
     """Search for materials by name with outgassing limits
     
     Args:
         material: Material name to search for (rapidfuzz matching)
         max_tml: Maximum acceptable TML percentage accounting for WVR if present (default 1.0%)
         max_cvcm: Maximum acceptable CVCM percentage (default 0.1%)
+        limit: Maximum number of results to return (default 10)
+        compliant_only: Only return materials that pass both TML and CVCM limits (default True)
+        include_details: Include id, manufacturer, and wvr fields in results (default True)
         
     Returns:
-        JSON string with materials matched in the database in order of match quality, outgassing values and TML and CVCM compliance. Maximum 100 results.
+        JSON string with materials matched in the database, sorted by match score (best first, 100 being exact match).
     """
     df = load_outgassing_data()
     if isinstance(df, str):  # Error message
@@ -58,46 +62,88 @@ def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1)
     # Fuzzy search on Sample Material column
     choices = df['Sample Material'].to_list()
     matched_materials = process.extract(material, choices, scorer=fuzz.WRatio, processor=utils.default_process, limit=100)
-    matched_names = [match[0] for match in matched_materials if match[1] > MATCH_THRESHOLD]  # Threshold for match quality
     
-    results = df[df['Sample Material'].isin(matched_names)].copy()
+    # Create mapping of material name to match score
+    match_scores = {match[0]: match[1] for match in matched_materials if match[1] > MATCH_THRESHOLD}
+    
+    results = df[df['Sample Material'].isin(match_scores.keys())].copy()
+    
+    # Add match score column
+    results['match_score'] = results['Sample Material'].map(match_scores)
     
     if len(results) == 0:
         return json.dumps({
             "query": material,
             "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
             "results": [],
-            "total_found": 0,
+            "total_matched": 0,
+            "total_compliant": 0,
+            "results_returned": 0,
             "message": "No materials found matching the search term"
         })
     
     # Add compliance indicators
     adjusted_tml = calculate_adjusted_tml(results)
+    results['adjusted_tml'] = adjusted_tml
     results['tml_pass'] = adjusted_tml <= max_tml
-    # Vectorized approach for CVCM     
     results['cvcm_pass'] = results['CVCM'] <= max_cvcm
+    
+    # Sort by match score (descending - higher is better)
+    results = results.sort_values('match_score', ascending=False)
+    
+    # Track statistics before filtering
+    total_matched = len(results)
+    total_compliant = len(results[results['tml_pass'] & results['cvcm_pass']])
+    
+    # Filter to compliant materials only if requested
+    if compliant_only:
+        results = results[results['tml_pass'] & results['cvcm_pass']].copy()
+        if len(results) == 0:
+            return json.dumps({
+                "query": material,
+                "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
+                "results": [],
+                "total_matched": total_matched,
+                "total_compliant": 0,
+                "results_returned": 0,
+                "message": f"Found {total_matched} materials matching '{material}', but none meet compliance limits"
+            })
+    
+    # Apply limit
+    results_truncated = len(results) > limit
+    results = results.head(limit)
     
     # Convert to list of dictionaries for JSON serialization
     materials_list = []
     for _, row in results.iterrows():
-        materials_list.append({
+        material_dict = {
             "sample_material": row['Sample Material'],
-            "id": row['ID'],
-            "manufacturer": row['MFR'],
+            "match_score": int(row['match_score']),
             "tml": float(row['TML']),
             "cvcm": float(row['CVCM']),
-            "wvr": float(row['WVR']) if not pd.isna(row['WVR']) else None,
             "material_usage": row['Material Usage'],
             "tml_pass": bool(row['tml_pass']),
             "cvcm_pass": bool(row['cvcm_pass'])
-        })
+        }
+        
+        # Add detailed fields if requested
+        if include_details:
+            material_dict["id"] = row['ID']
+            material_dict["manufacturer"] = row['MFR']
+            material_dict["wvr"] = float(row['WVR']) if not pd.isna(row['WVR']) else None
+        
+        materials_list.append(material_dict)
     
     return json.dumps({
         "query": material,
         "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
         "results": materials_list,
-        "total_found": len(materials_list),
-        "message": f"Found {len(materials_list)} materials matching the search term"
+        "total_matched": total_matched,
+        "total_compliant": total_compliant,
+        "results_returned": len(materials_list),
+        "results_truncated": results_truncated,
+        "compliant_only": compliant_only,
+        "message": f"Found {total_matched} materials matching '{material}' ({total_compliant} compliant)"
     })
     
 @app.tool()
