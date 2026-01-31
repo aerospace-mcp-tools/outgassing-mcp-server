@@ -28,8 +28,11 @@ Search for materials by name with fuzzy matching and compliance validation.
 - `material` (string): Material name to search for
 - `max_tml` (float, optional): Maximum acceptable TML % (default: 1.0)
 - `max_cvcm` (float, optional): Maximum acceptable CVCM % (default: 0.1)
+- `limit` (int, default: 10) Maximum number of results to return
+- `compliant_only` (bool, default: True) nly return materials that pass both TML and CVCM limits
+- `include_details`(bool, default: True) Include id, manufacturer, and wvr fields in results 
 
-**Returns:** Up to 100 matched materials with outgassing data and compliance flags
+**Returns:** JSON string with materials matched in the database, sorted by match score (best first, 100 being exact match)
 
 **Example usage in Copilot Chat:**
 ```
