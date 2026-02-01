@@ -1,7 +1,7 @@
 # Outgassing MCP Server - AI Agent Instructions
 
 ## Project Overview
-A FastMCP server providing NASA outgassing database access (13,582 materials) through Docker stdio transport. Single-file architecture ([main.py](../main.py)) with three tools: fuzzy material search, application filtering, and metadata retrieval.
+A FastMCP server providing NASA outgassing database access (13,582 materials) through Docker stdio transport. Single-file architecture ([main.py](../main.py)) with four tools: fuzzy material search, application filtering, and metadata retrieval.
 
 ## Architecture
 
@@ -23,7 +23,7 @@ A FastMCP server providing NASA outgassing database access (13,582 materials) th
 adjusted_tml = (TML - WVR) if WVR exists else TML
 compliant = adjusted_tml <= max_tml AND CVCM <= max_cvcm
 ```
-This logic appears in both `search_materials()` and `search_by_application()` via `calculate_adjusted_tml()`.
+This logic appears in both `query_materials()` and `query_application()` via `calculate_adjusted_tml()`.
 
 ## Development Workflow
 
@@ -69,20 +69,18 @@ def tool_name(param: type, optional: type = default) -> str:
 3. **Compliance**: Vectorized pandas operations (`df['tml_pass'] = adjusted_tml <= max_tml`)
 
 ### Return Format Standard
-All tools return JSON strings with this structure:
+All query tools return JSON strings with this structure:
 ```json
 {
   "query": "<input>",
   "limits": {"max_tml": float, "max_cvcm": float},
-  "results": [array of material dicts],
-  "total_found": int,
-  "message": "descriptive status"
+  "results": [array of material dicts]
 }
 ```
 
 ## Corporate Network Support
 - **Zscaler certificate**: Place `zscaler-root-ca.crt` in repo root before Docker build
-- Dockerfile conditionally installs if file exists (see [Dockerfile](../Dockerfile) lines 7-14)
+- Dockerfile conditionally installs if file exists (see [Dockerfile](../Dockerfile) lines 7-15)
 - Environment variables set: `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE`
 
 ## Key Constraints
@@ -103,8 +101,3 @@ All tools return JSON strings with this structure:
 ### Modifying search logic
 - Fuzzy matching: Adjust `MATCH_THRESHOLD` constant (line 8)
 - Match algorithm: Change `scorer=` in `process.extract()` calls
-- Result limit: Modify `limit=100` parameter
-- Case sensitivity: Edit `case=False` in `.str.contains()`
-
-### Changing compliance thresholds
-Default limits in function signatures (`max_tml: float = 1.0`). Users can override via MCP tool parameters.

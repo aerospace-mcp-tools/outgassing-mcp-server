@@ -19,47 +19,62 @@ This MCP server is built with [FastMCP](https://gofastmcp.com) and containerized
 - **VS Code Integration**: Seamless access through GitHub Copilot Chat
 - **Corporate Network Support**: Built-in Zscaler certificate handling
 
-## Available Tools
+## Tools
 
-### 1. `search_materials`
+### 1. `query_materials`
 Search for materials by name with fuzzy matching and compliance validation.
 
 **Parameters:**
 - `material` (string): Material name to search for
-- `max_tml` (float, optional): Maximum acceptable TML % (default: 1.0)
+- `max_tml` (float, optional): Maximum acceptable TML % accounting for WVR if present (default: 1.0)
 - `max_cvcm` (float, optional): Maximum acceptable CVCM % (default: 0.1)
-- `limit` (int, default: 10) Maximum number of results to return
-- `compliant_only` (bool, default: True) nly return materials that pass both TML and CVCM limits
-- `include_details`(bool, default: True) Include id, manufacturer, and wvr fields in results 
+- `limit` (int, optional): Maximum number of results to return (default: 10)
 
-**Returns:** JSON string with materials matched in the database, sorted by match score (best first, 100 being exact match)
+**Returns:** JSON string with materials matched in the database, sorted by match score (best first, 100 being exact match, less than 82 being a low quality match)
 
 **Example usage in Copilot Chat:**
 ```
 Check the outgassing-mcp-server for RTV adhesives with TML under 0.5%.
 ```
 
-### 2. `get_applications`
+### 2. `get_material`
+Get detailed material information by unique ID from the outgassing database.
+
+**Integration pattern:** Call `query_materials()` or `query_application()` to find material IDs before invoking this function.
+
+**Parameters:**
+- `ID` (string): Unique material ID in the outgassing database
+
+**Returns:** JSON string with complete material details or error message if ID not found
+
+**Example usage in Copilot Chat:**
+```
+Get details for material ID GSC32950 from the outgassing-mcp-server.
+```
+
+### 3. `get_applications`
 Retrieve all unique application/usage types from the database.
 
 **Parameters:** None
 
-**Returns:** List of all available application categories (961 unique types)
+**Returns:** JSON string with list of all available application categories (961 unique types)
 
 **Example usage in Copilot Chat:**
 ```
 Check the outgassing-mcp-server to see what material application types are listed?
 ```
 
-### 3. `search_by_application`
-Search materials by application type, returning only compliant materials.
+### 4. `query_application`
+Query materials by application/usage meeting specified TML and CVCM limits.
+
+**Integration pattern:** Call `get_applications()` to retrieve available application/usage types before invoking this function.
 
 **Parameters:**
-- `application` (string): Application type (e.g., "ADHESIVE", "POTTING")
+- `application` (string): Application/usage type to search for (e.g., ADHESIVE, POTTING, TAPE)
 - `max_tml` (float, optional): Maximum acceptable TML % (default: 1.0)
 - `max_cvcm` (float, optional): Maximum acceptable CVCM % (default: 0.1)
 
-**Returns:** Only materials meeting both TML and CVCM limits for the specified application
+**Returns:** JSON string with materials meeting application and outgassing criteria sorted by adjusted TML with lowest values first
 
 **Example usage in Copilot Chat:**
 ```
@@ -261,10 +276,6 @@ outgassing-mcp-server/
 ### Security Considerations
 
 For detailed security information, including vulnerability reporting, and privacy considerations, please see [SECURITY.md](SECURITY.md).
-
-**Key points:**
-- No authentication required (local VS Code integration)
-- Container runs with default user (non-root when possible)
 
 ## Support & Resources
 
