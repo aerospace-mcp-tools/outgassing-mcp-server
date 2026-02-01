@@ -1,150 +1,125 @@
+# Import Python libraries
 import os
+import json
+
+# Import third-party libraries
 import pandas as pd
 import numpy as np
-import json
 from fastmcp import FastMCP
 from rapidfuzz import fuzz, process, utils
 
-# Set constants
-MATCH_THRESHOLD = 82  # Minimum score for fuzzy matching
-
 app = FastMCP("outgassing-mcp-server")
 
-# Global data cache
+# Set up global data cache
 outgassing_data = None
 
 def load_outgassing_data():
-    """Load data."""
+    """Load outgassing data from local CSV file to global cache
+    """
+    # Access global data cache
     global outgassing_data
+    
+    # Return cached data if already loaded
     if outgassing_data is not None:
-        return outgassing_data
+        return
+    # Load data from CSV file
+    else:
+        outgassing_data = pd.read_csv("data/Outgassing_Db_rows.csv")
     
-    local_file = "data/Outgassing_Db_rows.csv"
-    
-    try:
-        outgassing_data = pd.read_csv(local_file)
-        print("Loaded outgassing data from local cache")
-    except Exception as e:
-        return f"Error: Unable to load outgassing data - {str(e)}"
+        # Calculate adjusted TML
+        calculate_adjusted_tml()
+        return 
 
-    return outgassing_data
-
-def calculate_adjusted_tml(df):
+def calculate_adjusted_tml():
     """
     Calculate adjusted TML for compliance: (TML - WVR) if WVR present, else TML.
-    Returns a pandas Series.
     """
-    conditions = [~pd.isna(df['WVR'])]
-    choices = [df['TML'] - df['WVR']]
-    default = df['TML']
-    return np.select(conditions, choices, default=default)
+    global outgassing_data
+    
+    # Vectorized calculation of adjusted TML
+    conditions = [~pd.isna(outgassing_data['WVR'])]
+    choices = [outgassing_data['TML'] - outgassing_data['WVR']]
+    default = outgassing_data['TML']
+    
+    # Add adjusted_tml column
+    outgassing_data['adjusted_tml'] = np.select(conditions, choices, default=default)
+    return
 
 @app.tool()
-def search_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1, 
-                    limit: int = 10, compliant_only: bool = True, include_details: bool = True) -> str:
-    """Search for materials by name with outgassing limits
+def query_materials(material: str, max_tml: float = 1.0, max_cvcm: float = 0.1, 
+                    limit: int = 10) -> str:
+    """Query materials from NASA outgassing database matching a material name and whether they meet TML and CVCM limits.
     
     Args:
-        material: Material name to search for (rapidfuzz matching)
+        material: Material name to search
         max_tml: Maximum acceptable TML percentage accounting for WVR if present (default 1.0%)
         max_cvcm: Maximum acceptable CVCM percentage (default 0.1%)
-        limit: Maximum number of results to return (default 10)
-        compliant_only: Only return materials that pass both TML and CVCM limits (default True)
-        include_details: Include id, manufacturer, and wvr fields in results (default True)
-        
+        limit: Maximum number of results to return (default 10)        
     Returns:
-        JSON string with materials matched in the database, sorted by match score (best first, 100 being exact match).
+        JSON string with materials matched in the database, sorted by match score (best first, 100 being exact match, less than 82 being a low quality match).
     """
-    df = load_outgassing_data()
-    if isinstance(df, str):  # Error message
-        return df
+    # Load outgassing data
+    load_outgassing_data()
     
-    # Fuzzy search on Sample Material column
-    choices = df['Sample Material'].to_list()
-    matched_materials = process.extract(material, choices, scorer=fuzz.WRatio, processor=utils.default_process, limit=100)
+    # Fuzzy search on Sample Material column - get all materials with scores
+    all_materials = outgassing_data['Sample Material'].to_list()
+    matched_materials = process.extract(material, all_materials, scorer=fuzz.WRatio, processor=utils.default_process, limit=limit)
     
-    # Create mapping of material name to match score
-    match_scores = {match[0]: match[1] for match in matched_materials if match[1] > MATCH_THRESHOLD}
+    # Create results dataframe with only matched materials
+    matched_names = [match[0] for match in matched_materials]
+    results = outgassing_data[outgassing_data['Sample Material'].isin(matched_names)].copy()
     
-    results = df[df['Sample Material'].isin(match_scores.keys())].copy()
+    # Add match scores to results
+    score_map = {match[0]: match[1] for match in matched_materials}
+    results['match_score'] = results['Sample Material'].map(score_map)
     
-    # Add match score column
-    results['match_score'] = results['Sample Material'].map(match_scores)
-    
-    if len(results) == 0:
-        return json.dumps({
-            "query": material,
-            "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
-            "results": [],
-            "total_matched": 0,
-            "total_compliant": 0,
-            "results_returned": 0,
-            "message": "No materials found matching the search term"
-        })
-    
-    # Add compliance indicators
-    adjusted_tml = calculate_adjusted_tml(results)
-    results['adjusted_tml'] = adjusted_tml
-    results['tml_pass'] = adjusted_tml <= max_tml
+    # Create TML and CVCM pass/fail columns
+    results['tml_pass'] = results['adjusted_tml'] <= max_tml
     results['cvcm_pass'] = results['CVCM'] <= max_cvcm
     
-    # Sort by match score (descending - higher is better)
-    results = results.sort_values('match_score', ascending=False)
-    
-    # Track statistics before filtering
-    total_matched = len(results)
-    total_compliant = len(results[results['tml_pass'] & results['cvcm_pass']])
-    
-    # Filter to compliant materials only if requested
-    if compliant_only:
-        results = results[results['tml_pass'] & results['cvcm_pass']].copy()
-        if len(results) == 0:
-            return json.dumps({
-                "query": material,
-                "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
-                "results": [],
-                "total_matched": total_matched,
-                "total_compliant": 0,
-                "results_returned": 0,
-                "message": f"Found {total_matched} materials matching '{material}', but none meet compliance limits"
-            })
-    
-    # Apply limit
-    results_truncated = len(results) > limit
-    results = results.head(limit)
-    
+    # Sort results by match score descending (best matches first)
+    results = results.sort_values(by='match_score', ascending=False)
+
     # Convert to list of dictionaries for JSON serialization
     materials_list = []
     for _, row in results.iterrows():
-        material_dict = {
+        materials_list.append({
             "sample_material": row['Sample Material'],
+            "id": row['ID'],
             "match_score": int(row['match_score']),
-            "tml": float(row['TML']),
-            "cvcm": float(row['CVCM']),
-            "material_usage": row['Material Usage'],
             "tml_pass": bool(row['tml_pass']),
             "cvcm_pass": bool(row['cvcm_pass'])
-        }
+        })
         
-        # Add detailed fields if requested
-        if include_details:
-            material_dict["id"] = row['ID']
-            material_dict["manufacturer"] = row['MFR']
-            material_dict["wvr"] = float(row['WVR']) if not pd.isna(row['WVR']) else None
-        
-        materials_list.append(material_dict)
-    
+    # Return JSON
     return json.dumps({
-        "query": material,
-        "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
-        "results": materials_list,
-        "total_matched": total_matched,
-        "total_compliant": total_compliant,
-        "results_returned": len(materials_list),
-        "results_truncated": results_truncated,
-        "compliant_only": compliant_only,
-        "message": f"Found {total_matched} materials matching '{material}' ({total_compliant} compliant)"
-    })
+            "query": material,
+            "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
+            "results": materials_list
+        })
+    
+@app.tool()
+def get_material(material_id: str) -> str:
+    """Get material details by unique ID from the outgassing database.
+    
+    Integration pattern: Call query_materials() or query_application() to find material IDs before invoking this function.
+    
+    Args:
+        material_id: Unique material ID in the outgassing database
+    Returns:
+        JSON string with material details or error message if ID not found
+    """
+    load_outgassing_data()
+    
+    material_row = outgassing_data[outgassing_data['ID'] == material_id]
+    if material_row.empty:
+        return json.dumps({
+            "error": f"Material with ID '{material_id}' not found in the database."
+        })
+        
+    # Convert the material row to a dictionary and then to JSON
+    material_dict = material_row.iloc[0].to_dict()
+    return json.dumps(material_dict)
     
 @app.tool()
 def get_applications() -> str:
@@ -153,19 +128,17 @@ def get_applications() -> str:
     Returns:
         JSON string with list of unique material application/usage types
     """
-    df = load_outgassing_data()
-    if isinstance(df, str):  # Error message
-        return df
+    load_outgassing_data()
     
-    unique_apps = df['Material Usage'].dropna().unique().tolist()
+    unique_apps = outgassing_data['Material Usage'].dropna().unique().tolist()
     return json.dumps({
         "total_applications": len(unique_apps),
         "applications": unique_apps
     })
 
 @app.tool()
-def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
-    """Search materials by application/usage with outgassing limits.
+def query_application(application: str, max_tml: float = 1.0, max_cvcm: float = 0.1) -> str:
+    """Query materials by application/usage meeting specified TML and CVCM limits.
     
     Integration pattern: Call get_applications() to retrieve available application/usage types before invoking this function.
     
@@ -175,59 +148,44 @@ def search_by_application(application: str, max_tml: float = 1.0, max_cvcm: floa
         max_cvcm: Maximum acceptable CVCM percentage (default 0.1%)
         
     Returns:
-        JSON string with materials meeting application and outgassing criteria
+        JSON string with materials meeting application and outgassing criteria sorted by adjusted TML with lowest values first.
     """
-    df = load_outgassing_data()
-    if isinstance(df, str):  # Error message
-        return df
+    load_outgassing_data()
     
-    # Filter by application (case-insensitive)
-    app_mask = df['Material Usage'].str.contains(application, case=False, na=False)
-    results = df[app_mask].copy()
+    # Create results dataframe with only materials matching the application
+    results = outgassing_data[outgassing_data['Material Usage'].str.contains(application, case=False, na=False)].copy()
     
-    if len(results) == 0:
-        # Get available applications for user reference
-        available_apps = df['Material Usage'].value_counts().head(10).index.tolist()
-        return json.dumps({
-            "query": application,
-            "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
-            "results": [],
-            "total_found": 0,
-            "message": f"No materials found for application '{application}'",
-            "available_applications": available_apps
-        })
-    
-    # Add compliance indicators
-    adjusted_tml = calculate_adjusted_tml(results)
-    results['tml_pass'] = adjusted_tml <= max_tml
-    # Vectorized approach for CVCM     
+    # Create TML and CVCM pass/fail columns
+    results['tml_pass'] = results['adjusted_tml'] <= max_tml
     results['cvcm_pass'] = results['CVCM'] <= max_cvcm
     
-    # Filter to only compliant materials for better results
-    compliant_results = results[results['tml_pass'] & results['cvcm_pass']].copy()
-
+    # Remove materials that do not meet criteria
+    results = results[(results['tml_pass']) & (results['cvcm_pass'])].copy()
+    
+    # Sort results by adjusted TML ascending 
+    results = results.sort_values(by='adjusted_tml', ascending=True)
+    
+    if results.empty:
+        return json.dumps({
+            "error": f"No materials found for application '{application}' meeting the specified criteria."
+        })
+    
     # Convert to list of dictionaries for JSON serialization
     materials_list = []
-    for _, row in compliant_results.iterrows():
+    for _, row in results.iterrows():
         materials_list.append({
             "sample_material": row['Sample Material'],
             "id": row['ID'],
-            "manufacturer": row['MFR'],
-            "tml": float(row['TML']),
-            "cvcm": float(row['CVCM']),
-            "wvr": float(row['WVR']) if not pd.isna(row['WVR']) else None,
-            "material_usage": row['Material Usage'],
             "tml_pass": bool(row['tml_pass']),
             "cvcm_pass": bool(row['cvcm_pass'])
         })
-    
+        
+    # Return JSON
     return json.dumps({
-        "query": application,
-        "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
-        "results": materials_list,
-        "total_found": len(results),
-        "showing_only_compliant": True
-    })
+            "query": application,
+            "limits": {"max_tml": max_tml, "max_cvcm": max_cvcm},
+            "results": materials_list
+        })
 
 if __name__ == "__main__":
     app.run()
