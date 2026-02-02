@@ -1,0 +1,27 @@
+[project]
+name = "outgassing-mcp-server"
+version = "0.1.0"
+description = "MCP server for querying outgassing properties of materials through approved aerospace sources."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastmcp>=2.13.0.2",
+    "pandas>=2.3.3",
+    "rapidfuzz>=3.14.3",
+]
+authors = [
+    {name = "Benedict Rose", email = "brbenrose@gmail.com"},
+]
+license = {text = "Apache-2.0"}
+keywords = ["mcp", "nasa", "aerospace", "outgassing", "materials", "ai", "copilot"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Aerospace",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: Apache Software License",
+]
+
+[project.urls]
+repository = "https://github.com/aerospace-mcp-tools/outgassing-mcp-server"
+homepage = "https://github.com/aerospace-mcp-tools/outgassing-mcp-server"
